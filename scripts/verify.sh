@@ -97,13 +97,19 @@ check_sh() {
           else bad "syntax error: ${f#"$ROOT"/}"; bash -n "$f" 2>&1 | sed 's/^/        /'; fi ;;
     *.ps1) ok "skipped bash parse (PowerShell): ${f#"$ROOT"/}" ;;
   esac
-  # A BOM or CRLF here breaks every user who pipes the installer.
+  # A BOM breaks every user who pipes the installer, on every platform.
   if head -c 3 "$f" | od -An -tx1 | grep -q 'ef bb bf'; then
     bad "UTF-8 BOM in ${f#"$ROOT"/} — remove it"
   fi
-  if grep -qU $'\r' "$f" 2>/dev/null; then
-    bad "CRLF in ${f#"$ROOT"/} — must be LF (bash: \$'\\r': command not found)"
-  fi
+  # CRLF is fatal for bash and harmless for PowerShell, so the check is
+  # per-language. Applying it to .ps1 was a false red: .gitattributes asks git
+  # for CRLF on that file, and the verifier then complained about what git did.
+  case "$f" in
+    *.sh) if grep -qU $'\r' "$f" 2>/dev/null; then
+            bad "CRLF in ${f#"$ROOT"/} — must be LF (bash: \$'\\r': command not found)"
+          fi ;;
+    *.ps1) ok "CRLF allowed (PowerShell): ${f#"$ROOT"/}" ;;
+  esac
 }
 
 check_sh "$ROOT/install.sh"
