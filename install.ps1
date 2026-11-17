@@ -16,6 +16,10 @@
 #   -NoGeneric          skip the generic ~\.agents\skills fallback
 #   -Uninstall          remove the skill from the same targets
 #
+# Environment:
+#   EM_BRANCH   branch or tag to install from            (default: main)
+#   EM_SRC_URL  full zip URL, overrides EM_BRANCH        (for mirrors / testing)
+#
 # Exit codes: 0 ok, 1 failure, 2 usage error.
 #
 # Design note: identical behaviour whether run from a clone (`.\install.ps1`)
@@ -41,6 +45,9 @@ $ErrorActionPreference = 'Stop'
 $Repo   = 'butianque/engineering-method'
 $Skill  = 'engineering-method'
 $Branch = if ($env:EM_BRANCH) { $env:EM_BRANCH } else { 'main' }
+# EM_SRC_URL overrides where the zip is fetched from: a mirror, or a local server
+# when testing this script without publishing anything.
+$SrcUrl = if ($env:EM_SRC_URL) { $env:EM_SRC_URL } else { "https://github.com/$Repo/archive/refs/heads/$Branch.zip" }
 
 function Say ($m)  { Write-Host $m }
 function Ok  ($m)  { Write-Host "  ok    $m" -ForegroundColor Green }
@@ -128,7 +135,7 @@ if ($scriptDir -and (Test-Path -LiteralPath (Join-Path $scriptDir "skills\$Skill
     $work = Join-Path ([System.IO.Path]::GetTempPath()) ("em-" + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $work -Force | Out-Null
     $zip = Join-Path $work 'src.zip'
-    $url = "https://github.com/$Repo/archive/refs/heads/$Branch.zip"
+    $url = $SrcUrl
     Say "source: $url"
     try {
         Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing

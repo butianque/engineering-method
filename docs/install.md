@@ -134,6 +134,71 @@ curl -fsSL https://raw.githubusercontent.com/butianque/engineering-method/main/i
 
 ---
 
+---
+
+## When `raw.githubusercontent.com` is unreachable
+
+This is common on networks where plain `github.com` works but the raw CDN does
+not (the connection is reset during TLS, so `curl` reports `(35) Recv failure` or
+`(28) Timeout`). The one-liner above will fail there — the installer never runs.
+
+Two routes that do not touch the raw CDN.
+
+### Route 1 — run the installer out of the release tarball
+
+`github.com/<owner>/<repo>/archive/…` is a different host path from
+`raw.githubusercontent.com`, so it often works where the CDN does not.
+
+```bash
+curl -fsSL https://github.com/butianque/engineering-method/archive/refs/heads/main.tar.gz \
+  | tar -xzO --wildcards '*/install.sh' | bash -s -- --all
+```
+
+Extract, then run — if you would rather read the script first:
+
+```bash
+curl -fL https://github.com/butianque/engineering-method/archive/refs/heads/main.tar.gz -o em.tar.gz
+tar -xzf em.tar.gz
+sed -n '1,40p' engineering-method-main/install.sh
+bash engineering-method-main/install.sh --all
+```
+
+### Route 2 — point the installer at a mirror
+
+`EM_SRC_URL` replaces the whole download URL, so any mirror or proxy works:
+
+```bash
+EM_SRC_URL="https://my-mirror.example/em/main.tar.gz" \
+  bash <(curl -fsSL https://my-mirror.example/em/install.sh) --all
+```
+
+The same variable exists in PowerShell (`$env:EM_SRC_URL`), where the payload is
+a `.zip` rather than a `.tar.gz`.
+
+`EM_BRANCH` selects a branch or tag; `EM_SRC_URL` overrides it entirely.
+
+### Route 3 — clone over SSH
+
+Pushing already uses `ssh.github.com:443` in some networks; the same path works
+for fetching:
+
+```bash
+git clone ssh://git@ssh.github.com:443/butianque/engineering-method.git
+cd engineering-method && bash install.sh
+```
+
+### Whichever route you take
+
+All of them install the **same tree**. The installer fingerprints the result, so
+a copy installed one way and re-installed another way is recognised as current:
+
+```
+repo skill : d1d2028b9f7f…      ← same hash from every route
+piped out  : d1d2028b9f7f…
+installed  : d1d2028b9f7f…
+```
+---
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |

@@ -129,6 +129,8 @@ bash install.sh            # 或  pwsh -File install.ps1
 
 **手动安装** —— 把 `skills/engineering-method/` 复制进你的 agent skills 目录。完整路径表见 [docs/agent-directories.md](docs/agent-directories.md)。
 
+**如果 `raw.githubusercontent.com` 被墙**（常见于 `github.com` 还能通、raw CDN 被重置的网络），上面那条一行命令根本跑不起来。三条不碰该域名的路子见 [docs/install.md](docs/install.md#when-rawgithubusercontentcom-is-unreachable)。
+
 ## 怎么用
 
 不用主动调用。它在**八类话语**上触发，中英都行：

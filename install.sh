@@ -13,6 +13,10 @@
 #   --dry-run        print what would happen, change nothing
 #   --no-generic     skip the generic ~/.agents/skills fallback
 #   --uninstall      remove the skill from the same targets
+#
+# Environment:
+#   EM_BRANCH   branch or tag to install from            (default: main)
+#   EM_SRC_URL  full tarball URL, overrides EM_BRANCH    (for mirrors / testing)
 #   -h | --help      this text
 #
 # Exit codes: 0 ok, 1 failure, 2 usage error.
@@ -27,6 +31,10 @@ set -uo pipefail
 REPO="butianque/engineering-method"
 SKILL="engineering-method"
 BRANCH="${EM_BRANCH:-main}"
+# EM_SRC_URL overrides where the tarball is fetched from. Two real uses:
+#   * a mirror, because github.com is unreachable from some networks;
+#   * testing this script against a local server without publishing anything.
+SRC_URL="${EM_SRC_URL:-https://github.com/$REPO/archive/refs/heads/$BRANCH.tar.gz}"
 
 AGENTS=""
 ALL=0
@@ -157,7 +165,7 @@ else
   command -v curl >/dev/null 2>&1 || die "curl is required for a piped install"
   command -v tar  >/dev/null 2>&1 || die "tar is required for a piped install"
   WORK="$(mktemp -d)"
-  URL="https://github.com/$REPO/archive/refs/heads/$BRANCH.tar.gz"
+  URL="$SRC_URL"
   say "source: $URL"
   curl -fsSL "$URL" -o "$WORK/src.tar.gz" || die "download failed: $URL"
   tar -xzf "$WORK/src.tar.gz" -C "$WORK" || die "extract failed"
