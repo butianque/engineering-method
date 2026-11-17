@@ -129,6 +129,8 @@ Both installers are **idempotent** (same tree hash ⇒ skip) and **cross-platfor
 
 **Manual install** — copy `skills/engineering-method/` into your agent's skills directory. See [docs/agent-directories.md](docs/agent-directories.md) for the full path table.
 
+**If `raw.githubusercontent.com` is blocked** — common on networks where plain `github.com` still answers but the raw CDN resets the connection, so the one-liner above cannot even start — three routes that avoid that host are in [docs/install.md](docs/install.md#when-rawgithubusercontentcom-is-unreachable).
+
 ## Use
 
 Nothing to invoke. The skill triggers on **eight kinds of talk**, in Chinese or English:
