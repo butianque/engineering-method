@@ -1,0 +1,8 @@
+# installers write nothing here, but local test runs do
+_tmp/
+*.log
+
+# OS noise
+.DS_Store
+Thumbs.db
+desktop.ini

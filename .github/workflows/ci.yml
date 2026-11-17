@@ -1,0 +1,112 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: verify (POSIX)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash scripts/verify.sh
+
+      - name: verify (Windows / Git Bash)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: bash scripts/verify.sh
+
+  install:
+    name: install (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # Install into a scratch directory and prove three things:
+      #   1. the skill lands where it was asked to land
+      #   2. a second run is a no-op (idempotency)
+      #   3. the installed gate still refuses an empty project
+      - name: install into a scratch dir (POSIX)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEST="$RUNNER_TEMP/installed"
+          bash install.sh --dir "$DEST" --dry-run
+          bash install.sh --dir "$DEST"
+          test -f "$DEST/SKILL.md"
+          # idempotency: the second run must report the tree as current
+          bash install.sh --dir "$DEST" | grep -q 'already current 1'
+          # the gate must refuse an empty project, not pass it
+          mkdir -p "$RUNNER_TEMP/empty"
+          if bash "$DEST/scripts/gate.sh" "$RUNNER_TEMP/empty"; then
+            echo "gate.sh passed an empty project — that is the bug this repo exists to prevent"; exit 1
+          fi
+
+      - name: install into a scratch dir (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dest = Join-Path $env:RUNNER_TEMP 'installed'
+          & pwsh -NoProfile -File .\install.ps1 -Dir $dest -DryRun
+          if ($LASTEXITCODE -ne 0) { throw 'dry-run failed' }
+          & pwsh -NoProfile -File .\install.ps1 -Dir $dest
+          if ($LASTEXITCODE -ne 0) { throw 'install failed' }
+          if (-not (Test-Path (Join-Path $dest 'SKILL.md'))) { throw 'SKILL.md missing after install' }
+          $second = & pwsh -NoProfile -File .\install.ps1 -Dir $dest
+          if (-not ($second -match 'already current 1')) { throw 'installer is not idempotent' }
+
+      - name: no agent detected is a usage error (POSIX)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          # An empty HOME must fail with exit 2, never silently do nothing.
+          set +e
+          HOME="$RUNNER_TEMP/nohome" bash install.sh --no-generic >/dev/null 2>&1
+          code=$?
+          set -e
+          if [ "$code" -ne 2 ]; then echo "expected exit 2, got $code"; exit 1; fi
+
+  metadata:
+    name: plugin manifests are valid JSON
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: parse
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in .claude-plugin/plugin.json .claude-plugin/marketplace.json; do
+            python3 -c "import json,sys; json.load(open('$f'))" && echo "ok $f"
+          done
+      - name: versions agree
+        shell: bash
+        run: |
+          set -euo pipefail
+          v=$(tr -d '\r\n' < VERSION)
+          p=$(python3 -c "import json;print(json.load(open('.claude-plugin/plugin.json'))['version'])")
+          m=$(python3 -c "import json;print(json.load(open('.claude-plugin/marketplace.json'))['metadata']['version'])")
+          s=$(grep -oE '^\s+version:\s*"?[^"]+"?' skills/engineering-method/SKILL.md | head -1 | sed 's/.*version:\s*"\?\([^"]*\)"\?/\1/')
+          echo "VERSION=$v plugin=$p marketplace=$m skill=$s"
+          [ "$v" = "$p" ] && [ "$v" = "$m" ] && [ "$v" = "$s" ]

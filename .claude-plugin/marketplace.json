@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json.schemastore.org/claude-plugin-marketplace.json",
+  "name": "engineering-method",
+  "owner": {
+    "name": "butianque",
+    "url": "https://github.com/butianque"
+  },
+  "metadata": {
+    "description": "An agent skill that refuses to let \"tests pass\" mean \"it works\": eight artefacts, one machine gate.",
+    "version": "0.7.1"
+  },
+  "plugins": [
+    {
+      "name": "engineering-method",
+      "source": "./",
+      "description": "Pin a request down before code, then gate on what was actually built. Nine steps, eight artefacts, a deterministic gate.sh that only reads and only refuses.",
+      "version": "0.7.1",
+      "author": {
+        "name": "butianque"
+      },
+      "homepage": "https://github.com/butianque/engineering-method",
+      "repository": "https://github.com/butianque/engineering-method",
+      "license": "MIT",
+      "keywords": [
+        "engineering",
+        "methodology",
+        "verification",
+        "architecture",
+        "gate",
+        "chinese"
+      ]
+    }
+  ]
+}

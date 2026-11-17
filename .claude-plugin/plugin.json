@@ -1,0 +1,20 @@
+{
+  "name": "engineering-method",
+  "version": "0.7.1",
+  "description": "An agent skill that refuses to let \"tests pass\" mean \"it works\": eight artefacts, one machine gate.",
+  "author": {
+    "name": "butianque",
+    "url": "https://github.com/butianque"
+  },
+  "homepage": "https://github.com/butianque/engineering-method",
+  "repository": "https://github.com/butianque/engineering-method",
+  "license": "MIT",
+  "keywords": [
+    "engineering",
+    "methodology",
+    "verification",
+    "architecture",
+    "gate",
+    "chinese"
+  ]
+}
