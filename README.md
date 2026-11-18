@@ -64,9 +64,25 @@ The outputs are eight files, and `gate.sh` refuses to pass until they are real:
 
 Three more since 0.8.0 (checked by `--charter` / `--board`): `文档宪法.md` (how docs may change · numbering · single authority), `切片表.md` (one slice = one end-to-end function), `任务书.md` (the nine-section task sheet for a subagent).
 
-## The two ideas worth stealing
+## Three ideas worth stealing
 
-### 1. Test passing is one linear extension of the dependency partial order
+### 1. Domains are derived, not listed
+
+```
+domain = category = "one class of thing that must exist for this to hold"
+How many, and what they are called, is derived from the problem — not from a template.
+Test: if you delete it, how does the system break? No answer ⇒ it is a detail, not a domain.
+```
+
+Order: **derive (feature → which suffering disappears → what must co-exist) → bound (what it owns / what it does not / how it is judged) → elicit (pull the requirement out of the user) → fall back (if he cannot say, ask the industry: who does this / why / at what cost) → write it down without patches.**
+
+The user usually says **half**. So elicitation is part of charting, not a communication skill:
+ask judgeable choices, offer the industry default for him to veto, reverse-derive from "what if we skip it", one question at a time, written down immediately.
+**Criterion: every question must be answerable as one judgeable sentence; if not, the question is wrong — not the user.**
+
+That also constrains the gate: **`--charter` checks structure (tables filled / paths exist / a boundary / an unknown with how-to-verify), never "are there nine domains".** A criterion that names one project's vocabulary only works on that project — `scripts/verify.sh` section 11 exists to hold that line.
+
+### 2. Test passing is one linear extension of the dependency partial order
 
 ```
 时间 = 依赖偏序 ⊑ 执行全序
@@ -80,7 +96,7 @@ Three more since 0.8.0 (checked by `--charter` / `--board`): `文档宪法.md` (
 A test is **one** linear extension of the partial order. Completion is the **whole** partial order being covered.
 That is why a green suite can coexist with a broken system — and why the fix is to write down every **cross-boundary edge** and give each one a command that covers it.
 
-### 2. You cannot tell an agent what is missing; you can let it watch something break
+### 3. You cannot tell an agent what is missing; you can let it watch something break
 
 ```
 你没法告诉 AI 它缺什么。
@@ -178,9 +194,9 @@ Exit codes: `0` pass · `1` blocked · `2` usage error. It only reads. It never 
 | G6 | A file that maps to no declared placement |
 | **G7** | **三定 incomplete: no dependency-order table / no module dependency direction / vague style** |
 | **G8** | **A spiral round with no new fact; or a criterion with no falsification** |
-| **G9** | **The charter is not a standard: missing sections / missing domains / no 串并汇 / no state table / no constitution** |
+| **G9** | **The charter cannot be judged: tables not filled / declared docs missing / no boundary / no unknown-or-how-to-verify** |
 | **G10** | **A patch segment in a document ("原写…现改为…", "补记") — D1 forbids it** |
-| **G11** | **The slice board cannot be dispatched: missing columns / no falsification / no order line / still 待定** |
+| **G11** | **The slice board cannot be dispatched: table not filled / no falsification / no dependency / still placeholders** |
 
 ## Layout
 

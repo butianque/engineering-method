@@ -1,6 +1,6 @@
 {
   "name": "engineering-method",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "An agent skill that refuses to let \"tests pass\" mean \"it works\": eight artefacts, one machine gate.",
   "author": {
     "name": "butianque",

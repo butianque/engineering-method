@@ -230,6 +230,86 @@ else
 fi
 rmdir "$EMPTY" 2>/dev/null || rm -rf "$EMPTY"
 
+# ---------------------------------------------------------------- 11 form-independence
+# The failure this check exists for: 0.8.0 shipped a gate that demanded "九个域" and
+# "串/并/汇". That gate only worked on the one project it was written from. A
+# criterion that names one project's vocabulary is not a criterion.
+#
+# Two halves:
+#   a) the gate must not contain that vocabulary
+#   b) a project with a DIFFERENT number of domains must still pass
+head2 "11 the gate is form-independent"
+
+VOCAB="$(grep -nE '九域|域表|定稿|串\|并\|汇' "$SKILL_DIR/scripts/gate.sh" 2>/dev/null | grep -v '^\s*#' || true)"
+if [ -z "$VOCAB" ]; then
+  ok "gate.sh contains no project-specific vocabulary"
+else
+  bad "gate.sh embeds one project's vocabulary — that criterion only works for that project:"
+  printf '%s\n' "$VOCAB" | head -5 | sed 's/^/        /'
+fi
+
+FIX="$(mktemp -d 2>/dev/null || echo "$ROOT/.verify-fixture")"
+mkdir -p "$FIX/docs"
+: >"$FIX/docs/01-接口.md"; : >"$FIX/docs/02-存储.md"; : >"$FIX/docs/03-判据.md"
+
+cat >"$FIX/立项书.md" <<'FIXTURE'
+# 立项
+
+| 项 | 内容 |
+|---|---|
+| 功能 | 给内部工具加一个上传队列 |
+| 困境消失 | 上传不再因为断网丢文件 |
+
+| # | 域 | 管什么 | 不管什么 | 删掉它会怎么坏 | 入口文档 |
+|---:|---|---|---|---|---|
+| 1 | 接口 | 请求形状与错误码；反例：不是鉴权 | 不管鉴权 | 前端无处可调 | docs/01-接口.md |
+| 2 | 存储 | 分片与断点；反例：不是备份 | 不管调度 | 断网即丢 | docs/02-存储.md |
+| 3 | 判据 | 怎么算过；反例：不是监控 | 不管告警 | 绿了也不知道真通不通 | docs/03-判据.md |
+
+## 不做
+
+| # | 不做 | 为什么 |
+|---:|---|---|
+| 1 | 多端同步 | 本版只做单端 |
+
+## 未知项
+
+| # | 不知道什么 | 打算怎么验 | 什么时候必须解决 |
+|---|---|---|---|
+| 1 | 弱网重试上限 | 抓包跑 20 次弱网 | 切片 3 之前 |
+FIXTURE
+
+cat >"$FIX/切片表.md" <<'FIXTURE'
+# 切片
+
+| 片 | 功能 | 数据流出口 | 信息流出口 | 依赖 |
+|---|---|---|---|---|
+| F1 | 单文件上传 | chunks / files 两表 | 返回 fileId 与已完成分片 | — |
+| F2 | 断点续传 | 只读 | 返回缺失分片列表 | F1 |
+
+顺序：F1 → F2
+反证：删掉 chunks 里一行 ⇒ 续传列表必须多出那个分片
+FIXTURE
+
+if bash "$SKILL_DIR/scripts/gate.sh" "$FIX" --steps 0 --charter --board >/dev/null 2>&1; then
+  ok "a three-domain project passes (the gate is not welded to one project)"
+else
+  bad "a three-domain project FAILS — the gate still assumes one project's shape"
+  bash "$SKILL_DIR/scripts/gate.sh" "$FIX" --steps 0 --charter --board 2>&1 | grep BLOCK | head -5 | sed 's/^/        /'
+fi
+
+# ...and the shipped template, copied but not filled in, must be refused
+TMPL="$(mktemp -d 2>/dev/null || echo "$ROOT/.verify-tmpl")"
+mkdir -p "$TMPL"
+cp "$SKILL_DIR/templates/立项书.md" "$TMPL/立项书.md" 2>/dev/null || true
+if bash "$SKILL_DIR/scripts/gate.sh" "$TMPL" --steps 0 --charter >/dev/null 2>&1; then
+  bad "an unfilled charter template PASSES — the gate only checks that headings exist"
+else
+  ok "an unfilled charter template is refused"
+fi
+
+rm -rf "$FIX" "$TMPL"
+
 # ---------------------------------------------------------------- verdict
 say ""
 if [ "$FAIL" -eq 0 ]; then

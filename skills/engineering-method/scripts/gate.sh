@@ -8,8 +8,12 @@
 #   bash gate.sh <项目目录> --done                # 额外跑验收.sh
 #   bash gate.sh <项目目录> --arch                # 额外跑 arch-check.sh（分类与落位）
 #   bash gate.sh <项目目录> --spiral              # 额外查螺旋：每轮必须有新增事实
-#   bash gate.sh <项目目录> --charter             # 额外查立项：七段 / 九域 / 宪法 / 裁决点 / 状态表
-#   bash gate.sh <项目目录> --board               # 额外查切片表：四列 / 反证 / 顺序行 / 无待定
+#   bash gate.sh <项目目录> --charter             # 额外查立项：表被填满 / 文档存在 / 边界 / 未知 / 无补丁
+#   bash gate.sh <项目目录> --board               # 额外查切片：表被填满 / 有反证 / 有依赖 / 无占位
+#
+#   --charter / --board 只查结构，不查词汇。
+#   理由：域 = 范畴 =「要让这件事成立必须存在的一类东西」，数量与名字由这个功能推出，
+#   每个项目都不同。把某个项目的域清单写成判据，就等于只对一个项目有效。
 #
 #   --charter / --board 认文件名关键词，不要求固定文件名：
 #     立项书 → 立项书.md，或名字含「立项书」的 .md（如 00-立项书-0.0.3.md）
@@ -255,54 +259,114 @@ if [ "$SPIRAL" = "1" ]; then
 fi
 
 # ---------- G9 立项是基准（--charter）----------
-# 依据：立项书不是介绍，是基准。下游每篇都要能被它逐行判「是/否」。
-# 缺七段 = 目标不可判、边界无限；缺九域 = 那类问题没有词汇，永远看不见。
+# 依据：立项文档不是介绍，是基准。下游每篇都要能被它逐行判「是/否」。
+#
+# 这里只查结构，不查词汇。理由：域 = 范畴 =「要让这件事成立必须存在的一类东西」，
+# 数量与名字由这个功能推出，每个项目都不同。把某个项目的域清单写成判据，
+# 就等于只对一个项目有效。可查的结构是：
+#   ① 有表，且至少一行被填满（一个域被说清了）
+#   ② 声明的文档路径真实存在（域必须落到一份真实文档）
+#   ③ 有边界（不做 / 不管 / 不在范围）
+#   ④ 有未知项，且写了「怎么验」
+#   ⑤ 无补丁段（G10）
 if [ "$CHARTER" = "1" ]; then
-  CH="$(resolve "$DIR" 立项书.md 立项书)"
+  CH="$(resolve "$DIR" 立项书.md 立项)"
+  [ -n "$CH" ] || CH="$(resolve "$DIR" "" charter)"
+  [ -n "$CH" ] || CH="$(resolve "$DIR" "" 提案)"
   if [ -z "$CH" ] || [ ! -s "$CH" ]; then
-    block "G9 缺 立项书（立项书.md，或名字含「立项书」的 .md）"
+    block "G9 缺立项文档（立项书.md / 名字含「立项」「charter」「提案」的 .md）"
   else
-    pass "G9 找到立项书: $(basename "$CH")"
-    # 七段关键词：缺哪段报哪段（同义词算过 —— 概念是「域表」，标题叫「九个域」也行）
-    grep -qE '域表|九域|九个域|总揽' "$CH" && pass "G9 段域表" || block "G9 立项书缺「域表」段"
-    for kw in 依赖顺序 落位表 不做 裁决; do
-      grep -q "$kw" "$CH" && pass "G9 段$kw" || block "G9 立项书缺「$kw」段"
-    done
+    pass "G9 找到立项文档: $(basename "$CH")"
 
-    # 九域：每域至少被点名一次（少一域 ⇒ 那类问题没词汇）
-    MISS=""
-    for d in 范畴 架构 形式化 工程 框架 细则 数据流 消费者 判据; do
-      grep -q "$d" "$CH" || MISS="$MISS $d"
-    done
-    if [ -n "$MISS" ]; then
-      block "G9 九域不全，缺:$MISS"
+    # ① 表格：数据行数 / 单元总数 / 空格 / 被填满的数据行数（表头不算）
+    #   遇到分隔行 ⇒ 上一行是表头，撤掉它的计数。否则「表头填满」会被当成「一个域填满了」。
+    STATS="$(awk '
+      /^\|/ {
+        line=$0
+        sub(/^[ \t]+/, "", line); sub(/[ \t]+$/, "", line)
+        if (line ~ /^\|[-:| ]+\|$/) {
+          if (prevrow) { rows--; total-=pcells; empty-=pempty; if (pfull) full-- }
+          prevrow=1; pcells=0; pempty=0; pfull=0
+          next
+        }
+        n=split(line, a, "|")
+        rows++; filled=0; cells=0
+        for (i=2; i<n; i++) {
+          c=a[i]; sub(/^[ \t]+/, "", c); sub(/[ \t]+$/, "", c)
+          cells++; total++
+          if (c=="") { empty++ } else { filled++ }
+        }
+        pfull = (cells>=4 && filled==cells) ? 1 : 0
+        if (pfull) full++
+        prevrow=1; pcells=cells; pempty=cells-filled
+      }
+      END { printf "%d %d %d %d\n", rows+0, total+0, empty+0, full+0 }
+    ' "$CH")"
+    TROWS=$(printf '%s' "$STATS" | cut -d' ' -f1)
+    TCELLS=$(printf '%s' "$STATS" | cut -d' ' -f2)
+    TEMPTY=$(printf '%s' "$STATS" | cut -d' ' -f3)
+    TFULL=$(printf '%s' "$STATS" | cut -d' ' -f4)
+
+    if [ "${TROWS:-0}" -lt 3 ] || [ "${TCELLS:-0}" -lt 6 ]; then
+      block "G9 立项里没有可用的表（≥3 行 ≥2 列）—— 域要被列出来，不能被写成一团散文"
+    elif [ "${TFULL:-0}" -lt 1 ]; then
+      block "G9 没有一行被填满：一个域都没说清（每格都要有内容；写「不知道」也算内容）"
     else
-      pass "G9 九域齐"
+      pass "G9 表 $TROWS 行，$TFULL 行填满，空格 $TEMPTY/$TCELLS"
     fi
 
-    # 依赖顺序必须写串/并/汇，否则只是罗列
-    if grep -qE '串|并|汇' "$CH"; then pass "G9 依赖顺序写了串/并/汇"
-    else block "G9 依赖顺序没写串/并/汇 —— 只是罗列，不是顺序"; fi
+    if [ "${TCELLS:-0}" -gt 0 ] && [ $(( TEMPTY * 100 / TCELLS )) -gt 60 ]; then
+      block "G9 表格空格率 $(( TEMPTY * 100 / TCELLS ))%（>60%）—— 模板抄了没填，等于没立项"
+    fi
 
-    # 状态表：草案/定稿/作废 三值
-    if grep -q '定稿' "$CH" && grep -qE '草案|作废' "$CH"; then pass "G9 状态表三值齐"
-    else block "G9 缺状态表三值（草案/定稿/作废）—— 已完成会被重读"; fi
+    # ② 域必须落到真实文档（skill 自身的 references/ templates/ 不算项目文档）
+    #    正则里只放 ASCII 分隔符：把中文标点写进 [^…] 会让 grep 按字节切，切出乱码路径。
+    PATHS=$(grep -oE '[^ |`()<>,]+\.md' "$CH" 2>/dev/null \
+            | sed -e 's/^[^A-Za-z0-9_./-]*//' -e 's/[^A-Za-z0-9_./-]*$//' \
+            | grep -vE '^(references|templates)/' | grep -v '^\.md$' | sort -u || true)
+    if [ -z "$PATHS" ]; then
+      block "G9 一个文档路径都没声明 —— 域没有入口文档，就等于没有位置"
+    else
+      BAD=""
+      while IFS= read -r p; do
+        [ -n "$p" ] || continue
+        [ -e "$DIR/$p" ] && continue
+        b="$(basename "$p")"
+        if [ -z "$(find "$DIR" -name "$b" -print -quit 2>/dev/null)" ]; then BAD="$BAD $p"; fi
+      done <<EOF
+$PATHS
+EOF
+      if [ -n "$BAD" ]; then
+        block "G9 声明的文档不存在:$BAD"
+      else
+        pass "G9 声明的文档都在（$(printf '%s\n' "$PATHS" | wc -l | tr -d ' ') 个）"
+      fi
+    fi
 
-    # 文档宪法：独立文件（名字含「宪法」或「纪律」），或立项书内写明 D1 与 D6
-    CT="$(resolve "$DIR" 文档宪法.md 宪法)"
-    [ -n "$CT" ] || CT="$(resolve "$DIR" 文档宪法.md 纪律)"
-    if [ -n "$CT" ]; then pass "G9 文档宪法存在: $(basename "$CT")"
-    elif grep -q 'D1' "$CH" && grep -q 'D6' "$CH"; then pass "G9 立项书内含宪法 D1/D6"
-    else block "G9 缺文档宪法（文档宪法.md / 名字含「宪法」或「纪律」的 .md，或立项书里的 D1–D6）—— 两份文档会各说一套"; fi
+    # ③ 边界
+    if grep -qE '不做|不管|不在范围|范围外|out of scope|non-goal' "$CH"; then
+      pass "G9 有边界（不做的部分）"
+    else
+      block "G9 没有边界 —— 没有「不做」，任何东西都能被说成「做完了」"
+    fi
 
-    # 裁决点：未定项必须写「它决定哪些下游文档」
-    if grep -q '决定' "$CH"; then pass "G9 裁决点写明了下游影响"
-    else block "G9 裁决点没写「它决定哪些下游文档」—— 未定项会被忘掉"; fi
+    # ④ 未知项 + 怎么验
+    if grep -qE '不知道|未定|未知|unknown|TBD|待验' "$CH"; then
+      if grep -qE '怎么验|如何验|验证方式|怎么解决|how to verify' "$CH"; then
+        pass "G9 未知项写了怎么验"
+      else
+        block "G9 写了未知项却没写「怎么验」—— 未知项会烂在原地"
+      fi
+    else
+      block "G9 一条未知项都没有（通常意味着盲区没写出来）"
+    fi
 
-    # G10 补丁段：只抓确凿的补丁句式（裸「修订」误伤太大）
-    PATCH=$(grep -nE '原写.{0,30}现改为|补记|修订记录|变更日志' "$CH" 2>/dev/null || true)
+    # ⑤ G10 补丁段
+    #    要排除「禁止…原写…现改为…」这种**引用**禁令的行，否则纪律本身会被判违规
+    PATCH=$(grep -nE '原写.{0,30}现改为|补记|修订记录|变更日志|以下为追加' "$CH" 2>/dev/null \
+            | grep -vE '禁止|不许|不得|forbid|Forbid' || true)
     if [ -n "$PATCH" ]; then
-      block "G10 立项书里有补丁段（D1 禁止：只写当前真相）:"
+      block "G10 立项里有补丁段（D1 禁止：只写当前真相）:"
       printf '%s\n' "$PATCH" | head -5 | sed 's/^/        /'
     else
       pass "G10 无补丁段"
@@ -312,36 +376,59 @@ fi
 
 # ---------- G11 切片可派（--board）----------
 # 依据：一片 = 一条能从输入走到行、再从行走回语义的功能。
-# 四列缺一列，就会有人问「这片算完了吗」；没有反证的判据不算判据。
+# 同样只查结构：有表、有填满的行、有反证、有依赖、无占位。
 if [ "$BOARD" = "1" ]; then
   BD="$(resolve "$DIR" 切片表.md 切片)"
+  [ -n "$BD" ] || BD="$(resolve "$DIR" "" 实施)"
   if [ -s "$BD" ]; then
-    pass "G11 找到切片表: $(basename "$BD")"
-    HDR=""
-    for kw in 数据流 信息流 依赖; do
-      grep -qE "^\|.*$kw" "$BD" || HDR="$HDR $kw"
-    done
-    if [ -n "$HDR" ]; then
-      block "G11 切片表缺列:$HDR（表头必须是 片/功能/数据流出口/信息流出口/依赖）"
+    pass "G11 找到切片文档: $(basename "$BD")"
+    BSTATS="$(awk '
+      /^\|/ {
+        line=$0
+        sub(/^[ \t]+/, "", line); sub(/[ \t]+$/, "", line)
+        if (line ~ /^\|[-:| ]+\|$/) {
+          if (prevrow) { rows--; if (pfull) full-- }
+          prevrow=1; pfull=0
+          next
+        }
+        n=split(line, a, "|")
+        rows++; filled=0; cells=0
+        for (i=2; i<n; i++) {
+          c=a[i]; sub(/^[ \t]+/, "", c); sub(/[ \t]+$/, "", c)
+          cells++; if (c!="") filled++
+        }
+        pfull = (cells>=3 && filled==cells) ? 1 : 0
+        if (pfull) full++
+        prevrow=1
+      }
+      END { printf "%d %d\n", rows+0, full+0 }
+    ' "$BD")"
+    BROWS=$(printf '%s' "$BSTATS" | cut -d' ' -f1)
+    BFULL=$(printf '%s' "$BSTATS" | cut -d' ' -f2)
+
+    if [ "${BROWS:-0}" -lt 2 ]; then
+      block "G11 切片没有可用表（≥2 片）—— 边切边想等于没切"
+    elif [ "${BFULL:-0}" -lt 1 ]; then
+      block "G11 没有一片被填满（每格都要有内容）"
     else
-      pass "G11 四列齐"
+      pass "G11 切片 $BROWS 行，$BFULL 片填满"
     fi
 
-    if grep -q '反证' "$BD"; then pass "G11 有反证列/段"
-    else block "G11 切片表没有反证 —— 每条判据必须能测出红"; fi
+    if grep -qE '反证|注入|falsif|必须红' "$BD"; then pass "G11 有反证"
+    else block "G11 没有反证 —— 每条判据必须能测出红"; fi
 
-    if grep -qE '→|->' "$BD"; then pass "G11 顺序写成一行"
-    else block "G11 没有顺序行（F1 → (F2 ∥ F3) → …）—— 依赖序只能靠记忆"; fi
+    if grep -qE '依赖|顺序|→|->|blocked' "$BD"; then pass "G11 写了依赖/顺序"
+    else block "G11 没写依赖顺序 —— 只能靠记忆排"; fi
 
-    TBD=$(grep -nE '待定|待补|TODO|TBD' "$BD" 2>/dev/null || true)
+    TBD=$(grep -nE '待定|待补|TODO|TBD|\?\?\?|XXX' "$BD" 2>/dev/null || true)
     if [ -n "$TBD" ]; then
-      block "G11 切片表还有待定/待补（写「不知道」也得写清了什么不知道）:"
+      block "G11 还有占位（写「不知道」也要写清了什么不知道）:"
       printf '%s\n' "$TBD" | head -5 | sed 's/^/        /'
     else
-      pass "G11 无待定"
+      pass "G11 无占位"
     fi
   else
-    block "G11 缺 切片表（切片表.md，或名字含「切片」的 .md）—— 不许一边切一边想"
+    block "G11 缺切片文档（切片表.md / 名字含「切片」「实施」的 .md）"
   fi
 fi
 
