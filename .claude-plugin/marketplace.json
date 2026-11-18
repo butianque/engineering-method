@@ -7,14 +7,14 @@
   },
   "metadata": {
     "description": "An agent skill that refuses to let \"tests pass\" mean \"it works\": eight artefacts, one machine gate.",
-    "version": "0.8.2"
+    "version": "0.8.3"
   },
   "plugins": [
     {
       "name": "engineering-method",
       "source": "./",
       "description": "Pin a request down before code, then gate on what was actually built. Nine steps, eight artefacts, a deterministic gate.sh that only reads and only refuses.",
-      "version": "0.8.2",
+      "version": "0.8.3",
       "author": {
         "name": "butianque"
       },

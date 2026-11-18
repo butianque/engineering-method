@@ -324,7 +324,29 @@ fi
 
 rm -rf "$FIX" "$TMPL"
 
-# ---------------------------------------------------------------- verdict
+# 0.8.3: the division of labour between the task issuer and a subagent is the
+# one rule the user stated without hedging ("就是这样"). If it is ever softened
+# — e.g. "pure moves may be self-verified" — that is a regression, not a tweak.
+head2 "12 division of labour (issuer verifies, subagent executes)"
+
+if grep -q '不负责验收' "$SKILL_DIR/references/r8-slice-rhythm.md"; then
+  ok "r8 states: subagent does not verify"
+else
+  bad "r8 lost the rule that a subagent does not verify"
+fi
+
+if grep -q '纯搬运' "$SKILL_DIR/references/r8-slice-rhythm.md" \
+   && grep -q '纯搬运' "$SKILL_DIR/references/r7-slice-board.md"; then
+  ok "the no-exception clause (even pure moves) is present in r7 and r8"
+else
+  bad "the 'even pure moves are not self-verified' clause was dropped — that is the exception the user forbade"
+fi
+
+if grep -q 'role: execute-only' "$SKILL_DIR/templates/任务书.md"; then
+  ok "task sheet carries role: execute-only"
+else
+  bad "task sheet dropped role: execute-only"
+fi
 say ""
 if [ "$FAIL" -eq 0 ]; then
   say "PASS  repository is publishable"
