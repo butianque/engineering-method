@@ -205,10 +205,11 @@ engineering-method/
 ├── skills/engineering-method/       the skill itself
 │   ├── SKILL.md                     20 KB entry: C/G rules, 8 entries, 9 steps, routing table
 │   ├── references/                  31 files, loaded on demand
-│   ├── templates/                   17 files: 立项书 / 规划 / 策划 / 设计 / 范畴表 / 集成面 /
+│   ├── templates/                   18 files: 立项书 / 规划 / 策划 / 设计 / 范畴表 / 集成面 /
 │   │                                           验收.sh / 反合理化表 / 文档宪法 / 切片表 / 任务书
 │   └── scripts/
-│       ├── gate.sh                  the machine gate
+│       ├── gate.sh                  the machine gate (four gates)
+│       ├── consistency.sh           self-consistency (one concept, one definition)
 │       └── arch-check.sh            placement + boundary check
 ├── install.sh  install.ps1          one-shot installers
 ├── .claude-plugin/                  Claude Code plugin + marketplace manifest

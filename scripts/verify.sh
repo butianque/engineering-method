@@ -348,6 +348,31 @@ else
   bad "task sheet dropped role: execute-only"
 fi
 say ""
+# ---------------------------------------------------------------- 13 自洽（本 skill 自己的 D3）
+# 0.8.x 的教训：一个要求别人「一个概念一处定义」的 skill，自己长出了
+# 三套编号（九步 / 八类入口 / 八件产物）和五处「谁验收」。
+# 这一节把「自洽」变成可跑的检查，而不是「下次注意」。
+head2 "13 self-consistency (the skill obeys its own D3)"
+
+if bash "$SKILL_DIR/scripts/consistency.sh" "$SKILL_DIR" >/dev/null 2>&1; then
+  ok "consistency.sh passes (one concept, one definition)"
+else
+  bad "consistency.sh found a conflict — the skill has two names for one thing:"
+  bash "$SKILL_DIR/scripts/consistency.sh" "$SKILL_DIR" 2>&1 | grep -E 'CONFLICT' | head -8 | sed 's/^/        /'
+fi
+
+# ...and it must actually refuse a skill that has two numbering schemes
+BADSK="$(mktemp -d 2>/dev/null || echo "$ROOT/.verify-badsk")"
+mkdir -p "$BADSK/references" "$BADSK/templates" "$BADSK/scripts"
+printf '# tiny\n\n九步：步 0 → 步 1 → 步 7\n' >"$BADSK/SKILL.md"
+if bash "$SKILL_DIR/scripts/consistency.sh" "$BADSK" >/dev/null 2>&1; then
+  bad "consistency.sh passed a skill with legacy numbering — the check is theatre"
+else
+  ok "consistency.sh refuses legacy numbering"
+fi
+rm -rf "$BADSK"
+
+say ""
 if [ "$FAIL" -eq 0 ]; then
   say "PASS  repository is publishable"
   exit 0

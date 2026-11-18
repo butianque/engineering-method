@@ -206,10 +206,11 @@ engineering-method/
 ├── skills/engineering-method/       skill 本体
 │   ├── SKILL.md                     20 KB 入口：C/G 铁律、8 个入口、9 步、路由表
 │   ├── references/                  31 份，按需加载
-│   ├── templates/                   17 份：立项书 / 规划 / 策划 / 设计 / 范畴表 / 集成面 /
+│   ├── templates/                   18 份：立项书 / 规划 / 策划 / 设计 / 范畴表 / 集成面 /
 │   │                                            验收.sh / 反合理化表 / 文档宪法 / 切片表 / 任务书
 │   └── scripts/
-│       ├── gate.sh                  机器判据
+│       ├── gate.sh                  机器判据（四道门）
+│       ├── consistency.sh           自洽检查（一个概念一处定义）
 │       └── arch-check.sh            落位与边界检查
 ├── install.sh  install.ps1          一键安装
 ├── .claude-plugin/                  Claude Code 插件与市集清单

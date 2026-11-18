@@ -3,8 +3,12 @@
 #
 # 用法：
 #   bash gate.sh <项目目录>                       # 查全部八件套
-#   bash gate.sh <项目目录> --steps 4             # 只查范畴表（范畴入口）
-#   bash gate.sh <项目目录> --steps 0,1           # 只查立项书 + 规划
+#   bash gate.sh <项目目录> --steps 4             # 只查范畴表（层一·划界）
+#   bash gate.sh <项目目录> --steps 0,1           # 只查立项书 + 切片表
+#
+#   --steps 的数字 = 位置序号（不是「第几步」，是「哪一块」）：
+#     0 层一·域  1 层一·切片表  2 层一·策划  3 层一·三定
+#     4 层一·划界  5 层二·集成面  6 门4·验收  7 反合理化
 #   bash gate.sh <项目目录> --done                # 额外跑验收.sh
 #   bash gate.sh <项目目录> --arch                # 额外跑 arch-check.sh（分类与落位）
 #   bash gate.sh <项目目录> --spiral              # 额外查螺旋：每轮必须有新增事实
@@ -80,6 +84,11 @@ declare -A F=(
   [0]="立项书.md" [1]="规划.md" [2]="策划.md" [3]="设计.md"
   [4]="范畴表.md" [5]="集成面.md" [6]="验收.sh" [7]="反合理化表.md"
 )
+# 位置名（与 SKILL.md 的「三层四门」同一套词；数字只是 CLI 序号）
+declare -A P=(
+  [0]="层一·域" [1]="层一·切片表" [2]="层一·策划" [3]="层一·三定"
+  [4]="层一·划界" [5]="层二·集成面" [6]="门4·验收" [7]="反合理化"
+)
 # 关键词：空 = 只认固定名（.sh 与表类文件名自带语义，不该被前缀猜中）
 declare -A K=(
   [0]="立项书" [1]="规划" [2]="策划" [3]="设计"
@@ -90,15 +99,15 @@ for s in 0 1 2 3 4 5 6 7; do
     f="${F[$s]}"
     hit="$(resolve "$DIR" "$f" "${K[$s]}")"
     if [ -n "$hit" ]; then
-      if [ "$(basename "$hit")" = "$f" ]; then pass "G1 步$s $f"
-      else pass "G1 步$s $f（认作 $(basename "$hit")）"; fi
+      if [ "$(basename "$hit")" = "$f" ]; then pass "G1 ${P[$s]} $f"
+      else pass "G1 ${P[$s]} $f（认作 $(basename "$hit")）"; fi
     else
-      block "G1 缺步$s产物或为空: $f"
+      block "G1 缺 ${P[$s]} 产物或为空: $f"
     fi
   fi
 done
 
-# ---------- G4 设计必须签收（步 3 的核心 gate）----------
+# ---------- G4 设计必须签收（层一·三定的核心 gate）----------
 if has 3; then
   if [ -s "$DIR/.runs/signoff-system-design.md" ]; then
     pass "G4 系统设计已签收"
@@ -107,7 +116,7 @@ if has 3; then
   fi
 fi
 
-# ---------- G7 立项后三定（位置结构 / 依赖序 / 风格）----------
+# ---------- G7 三定（位置结构 / 依赖序 / 风格）----------
 # 依据：AI 只写全序不校验偏序、只看见文件不看见坐标（见 references/spacetime.md）
 # 缺一不许写业务代码。
 if has 3; then
@@ -178,7 +187,7 @@ if [ "$ARCH" = "1" ]; then
   fi
 fi
 
-# ---------- G2 集成面（步 5）----------
+# ---------- G2 集成面（层二·集成面）----------
 IS="$DIR/集成面.md"
 if has 5 && [ -s "$IS" ]; then
   MISSING=""
@@ -217,7 +226,7 @@ if has 5 && [ -s "$IS" ]; then
   fi
 fi
 
-# ---------- G3 验收（步 7，仅 --done）----------
+# ---------- G3 验收（门4，仅 --done）----------
 if [ "$MODE" = "--done" ] && has 6; then
   ACC="$DIR/验收.sh"
   if [ ! -s "$ACC" ]; then
@@ -317,6 +326,38 @@ if [ "$CHARTER" = "1" ]; then
 
     if [ "${TCELLS:-0}" -gt 0 ] && [ $(( TEMPTY * 100 / TCELLS )) -gt 60 ]; then
       block "G9 表格空格率 $(( TEMPTY * 100 / TCELLS ))%（>60%）—— 模板抄了没填，等于没立项"
+    fi
+
+    # ①b 整列为空的列 = 装饰列（结构性，不依赖列名）
+    #     典型：写了「删掉它会怎么坏」这一列，一格都没填 —— 那一列等于不存在。
+    #     必须**按表**统计：同一个文件里有多张表，跨表混算会把空列算成满列。
+    EMPTYCOLS="$(awk '
+      function flush(   j) {
+        if (datrows > 0)
+          for (j = 1; j <= maxc; j++)
+            if (cnt[j] > 1 && fill[j] + 0 == 0) printf "表%d列%d ", blkno, j
+        delete cnt; delete fill; datrows = 0; maxc = 0; seensep = 0
+      }
+      /^\|/ {
+        line = $0; sub(/^[ \t]+/, "", line); sub(/[ \t]+$/, "", line)
+        if (line ~ /^\|[-:| ]+\|$/) { if (!seensep) { seensep = 1; blkno++ } next }
+        n = split(line, a, "|")
+        if (!seensep) next
+        datrows++
+        if (n - 2 > maxc) maxc = n - 2
+        for (i = 2; i < n; i++) {
+          v = a[i]; sub(/^[ \t]+/, "", v); sub(/[ \t]+$/, "", v)
+          cnt[i-1]++; if (v != "") fill[i-1]++
+        }
+        next
+      }
+      { flush() }
+      END { flush() }
+    ' "$CH")"
+    if [ -n "$EMPTYCOLS" ]; then
+      block "G9 有整列没填（$EMPTYCOLS）—— 占位列等于没写：删掉那一列，或填满"
+    else
+      pass "G9 无空列"
     fi
 
     # ② 域必须落到真实文档（skill 自身的 references/ templates/ 不算项目文档）
