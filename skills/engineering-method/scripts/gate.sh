@@ -38,6 +38,7 @@ ARCH=""
 SPIRAL=""
 CHARTER=""
 BOARD=""
+DOMAINS=""
 STEPS="0,1,2,3,4,5,6,7"
 
 while [ $# -gt 0 ]; do
@@ -47,13 +48,14 @@ while [ $# -gt 0 ]; do
     --spiral)  SPIRAL="1"; shift ;;
     --charter) CHARTER="1"; shift ;;
     --board)   BOARD="1"; shift ;;
+    --domains) DOMAINS="1"; shift ;;
     --steps)   STEPS="${2:-}"; shift 2 ;;
     *)         DIR="${1:-}"; shift ;;
   esac
 done
 
 if [ -z "$DIR" ] || [ ! -d "$DIR" ]; then
-  echo "用法: bash gate.sh <项目目录> [--steps 0,1,2,3,4,5,6,7] [--done] [--arch] [--spiral] [--charter] [--board]" >&2
+  echo "用法: bash gate.sh <项目目录> [--steps 0,1,2,3,4,5,6,7] [--done] [--arch] [--spiral] [--charter] [--board] [--domains]" >&2
   exit 2
 fi
 
@@ -470,6 +472,111 @@ if [ "$BOARD" = "1" ]; then
     fi
   else
     block "G11 缺切片文档（切片表.md / 名字含「切片」「实施」的 .md）"
+  fi
+fi
+
+# ---------- G13 域文档齐（门 2，--domains）----------
+# 依据：真实项目的成本在「每个域各自写完一份文档」，而这一步最容易被吞进「三定」里，
+# 于是出现「三定写完了，但域文档只有一半」却没人发现。
+#
+# 只查结构，不查词汇（C14）：
+#   ① 清单里每一行都声明了入口文档（那一格不能空）
+#   ② 每一份声明的文档真实存在且非空
+#   ③ 每份文档不是空壳：有一张填满的数据行表，或 ≥3 个二/三级标题
+#
+# 「三件套是否真的齐」属人判（H 类），机器只保证「不是空的」。
+if [ "$DOMAINS" = "1" ]; then
+  CH="$(resolve "$DIR" 立项书.md 立项)"
+  [ -n "$CH" ] || CH="$(resolve "$DIR" "" charter)"
+  [ -n "$CH" ] || CH="$(resolve "$DIR" "" 提案)"
+
+  if [ -z "$CH" ] || [ ! -s "$CH" ]; then
+    block "G13 缺立项文档 —— 清单都没有，无从查域文档"
+  else
+    # 抓清单里声明的 .md 路径（排除 skill 自身文档）
+    DOCS=$(grep -oE '[^ |`()<>,]+\.md' "$CH" 2>/dev/null \
+           | sed -e 's/^[^A-Za-z0-9_./-]*//' -e 's/[^A-Za-z0-9_./-]*$//' \
+           | grep -vE '^(references|templates)/' | grep -v '^\.md$' | sort -u || true)
+
+    NDM=$(printf '%s\n' "$DOCS" | grep -c . || true)
+    if [ "${NDM:-0}" -eq 0 ]; then
+      block "G13 清单没声明任何入口文档 —— 域没有落点，等于没建"
+    else
+      # ③ 逐份：存在 / 非空 / 不是空壳
+      HOLLOW=""
+      ABSENT=""
+      while IFS= read -r d; do
+        [ -n "$d" ] || continue
+        f=""
+        if [ -s "$DIR/$d" ]; then f="$DIR/$d"
+        else
+          b="$(basename "$d")"
+          cand="$(find "$DIR" -name "$b" -print -quit 2>/dev/null)"
+          [ -n "$cand" ] && [ -s "$cand" ] && f="$cand"
+        fi
+        if [ -z "$f" ]; then ABSENT="$ABSENT $d"; continue; fi
+
+        # 结构化内容判定：填满的数据行表 OR ≥3 个二/三级标题
+        TABROWS=$(awk '
+          /^\|/ {
+            line=$0; sub(/^[ \t]+/, "", line); sub(/[ \t]+$/, "", line)
+            if (line ~ /^\|[-:| ]+\|$/) next
+            n=split(line, a, "|"); cells=0; filled=0
+            for (i=2; i<n; i++) {
+              v=a[i]; sub(/^[ \t]+/, "", v); sub(/[ \t]+$/, "", v)
+              cells++; if (v!="") filled++
+            }
+            if (cells>=2 && filled==cells) full++
+          }
+          END { printf "%d\n", full+0 }' "$f")
+        HEADS=$(grep -cE '^#{2,3} ' "$f" || true)
+
+        if [ "${TABROWS:-0}" -lt 1 ] && [ "${HEADS:-0}" -lt 3 ]; then
+          HOLLOW="$HOLLOW $d"
+        fi
+      done <<EOF
+$DOCS
+EOF
+
+      if [ -n "$ABSENT" ]; then
+        block "G13 声明了但文档不存在（或为空）:$ABSENT"
+      else
+        pass "G13 声明的 $NDM 份域文档都存在且非空"
+      fi
+
+      if [ -n "$HOLLOW" ]; then
+        block "G13 这些文档是空壳（没有填满的表，也没有 ≥3 个小节）:$HOLLOW"
+      else
+        pass "G13 每份域文档都有结构（表或小节）"
+      fi
+    fi
+
+    # ② 清单里的每一行都要有文档（抓「有域没落点」）
+    #    必须**按表**判断：同一个文件里还有「不做」「未知项」等表，
+    #    它们本来就没有 .md 列 —— 跨表混判会把它们全误报成「域没落点」。
+    NODOC=$(awk '
+      function flush(   j) {
+        if (hasmd) for (j = 1; j <= ndr; j++) if (!rowmd[j]) printf "%s ", first[j]
+        delete rowmd; delete first; ndr = 0; hasmd = 0
+      }
+      /^\|/ {
+        line=$0; sub(/^[ \t]+/, "", line); sub(/[ \t]+$/, "", line)
+        if (line ~ /^\|[-:| ]+\|$/) { seensep = 1; next }
+        if (!seensep) next                     # 表头行
+        ndr++
+        f = line; gsub(/^\|[ \t]*/, "", f); sub(/[ \t]*\|.*$/, "", f)
+        first[ndr] = f
+        if (line ~ /\.md/) { rowmd[ndr] = 1; hasmd = 1 } else { rowmd[ndr] = 0 }
+        next
+      }
+      { flush(); seensep = 0 }
+      END { flush() }
+    ' "$CH")
+    if [ -n "$NODOC" ]; then
+      block "G13 清单里有行没写入口文档（首列: $NODOC）—— 那个域没有位置"
+    else
+      pass "G13 清单每行都指到了文档（或本行不是域行）"
+    fi
   fi
 fi
 

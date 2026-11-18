@@ -372,6 +372,60 @@ else
 fi
 rm -rf "$BADSK"
 
+# ---------------------------------------------------------------- 12b gate 2 (domains)
+# 0.9.2: the real cost of a project sits in "every domain writes its own document",
+# and that step is the one most easily swallowed by 三定 — so it gets its own gate.
+# This gate must actually go red, otherwise it is a pass for half-written design.
+head2 "12b gate 2 (every domain has a real document)"
+
+if grep -q -- '--domains' "$SKILL_DIR/scripts/gate.sh"; then
+  ok "gate.sh implements --domains"
+else
+  bad "gate.sh does not implement --domains (gate 2 has no machine check)"
+fi
+
+G2DIR="$(mktemp -d 2>/dev/null || echo "$ROOT/.verify-g2")"
+mkdir -p "$G2DIR/docs"
+printf '# A\n\n| x | y |\n|---|---|\n| 1 | 2 |\n' >"$G2DIR/docs/01-a.md"
+printf '# B\n\none line.\n' >"$G2DIR/docs/02-b.md"
+cat >"$G2DIR/立项书.md" <<'FIXTURE'
+# charter
+
+| # | domain | doc |
+|---:|---|---|
+| 1 | A | docs/01-a.md |
+| 2 | B | docs/02-b.md |
+| 3 | C | docs/03-c.md |
+
+## not doing
+
+| # | no | why |
+|---:|---|---|
+| 1 | multi | single |
+
+## unknown
+
+| # | what | how to verify |
+|---|---|---|
+| 1 | weaknet | capture |
+FIXTURE
+
+if bash "$SKILL_DIR/scripts/gate.sh" "$G2DIR" --steps 0 --domains >/dev/null 2>&1; then
+  bad "gate 2 passed a project with a missing doc and a hollow doc"
+else
+  ok "gate 2 refuses a missing domain doc"
+fi
+
+printf '# C\n\n| x | y |\n|---|---|\n| 1 | 2 |\n' >"$G2DIR/docs/03-c.md"
+printf '# B\n\n| x | y |\n|---|---|\n| 1 | 2 |\n' >"$G2DIR/docs/02-b.md"
+if bash "$SKILL_DIR/scripts/gate.sh" "$G2DIR" --steps 0 --domains >/dev/null 2>&1; then
+  ok "gate 2 passes once every domain doc is real"
+else
+  bad "gate 2 still blocks after the docs were completed — it is a wall, not a gate"
+  bash "$SKILL_DIR/scripts/gate.sh" "$G2DIR" --steps 0 --domains 2>&1 | grep BLOCK | head -4 | sed 's/^/        /'
+fi
+rm -rf "$G2DIR"
+
 say ""
 if [ "$FAIL" -eq 0 ]; then
   say "PASS  repository is publishable"
