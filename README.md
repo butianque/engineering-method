@@ -62,6 +62,8 @@ The outputs are eight files, and `gate.sh` refuses to pass until they are real:
 | `验收.sh` | L1 syntax → L2 unit → **L3 end-to-end from the real entry** |
 | `反合理化表.md` | Excuses → reality, with named consequences |
 
+Three more since 0.8.0 (checked by `--charter` / `--board`): `文档宪法.md` (how docs may change · numbering · single authority), `切片表.md` (one slice = one end-to-end function), `任务书.md` (the nine-section task sheet for a subagent).
+
 ## The two ideas worth stealing
 
 ### 1. Test passing is one linear extension of the dependency partial order
@@ -137,9 +139,9 @@ Nothing to invoke. The skill triggers on **eight kinds of talk**, in Chinese or 
 
 | | Triggers on | Enters at |
 |---|---|---|
-| 认知 | "认知不对" "概念不清" "AI 不懂这个" | ↻ 补给 → backfill 3/4 |
+| 认知 | "认知不对" "没有这层认知" "做出来四不像" | ↻ 补给 → premise chain |
 | 范畴 | "定个范畴" "术语不统一" "边界在哪" | step 4 |
-| 立项 | "立项" "要不要做" "从哪开始" | step 0 |
+| 立项 | "立项" "要不要做" "从哪开始" "立项即标准" | step 0 |
 | 规划 | "规划" "分几步" "里程碑" | step 1 |
 | 策划 | "策划" "方案" "怎么落地" | step 2 |
 | 设计 | "设计" "它应该长什么样" "部件怎么接" | step 3 |
@@ -160,6 +162,8 @@ bash $SK/scripts/gate.sh <project> --steps 3      # design only (G4 sign-off + G
 bash $SK/scripts/gate.sh <project> --arch         # + placement (G6)
 bash $SK/scripts/gate.sh <project> --done         # + acceptance must exit 0 (G3)
 bash $SK/scripts/gate.sh <project> --spiral       # + every round recorded a new fact (G8)
+bash $SK/scripts/gate.sh <project> --charter      # + the charter is a standard (G9 / G10)
+bash $SK/scripts/gate.sh <project> --board        # + every slice is dispatchable (G11)
 ```
 
 Exit codes: `0` pass · `1` blocked · `2` usage error. It only reads. It never edits anything.
@@ -173,16 +177,20 @@ Exit codes: `0` pass · `1` blocked · `2` usage error. It only reads. It never 
 | G5 | (policy) probe turned red and you want to edit the probe — ask a second agent first |
 | G6 | A file that maps to no declared placement |
 | **G7** | **三定 incomplete: no dependency-order table / no module dependency direction / vague style** |
-| **G8** | **A spiral round with no new fact** |
+| **G8** | **A spiral round with no new fact; or a criterion with no falsification** |
+| **G9** | **The charter is not a standard: missing sections / missing domains / no 串并汇 / no state table / no constitution** |
+| **G10** | **A patch segment in a document ("原写…现改为…", "补记") — D1 forbids it** |
+| **G11** | **The slice board cannot be dispatched: missing columns / no falsification / no order line / still 待定** |
 
 ## Layout
 
 ```
 engineering-method/
 ├── skills/engineering-method/       the skill itself
-│   ├── SKILL.md                     16 KB entry: 13 rules, 8 entries, 9 steps, routing table
-│   ├── references/                  27 files, loaded on demand
-│   ├── templates/                   13 files: 立项书 / 规划 / 策划 / 设计 / 范畴表 / 集成面 / 验收.sh / 反合理化表
+│   ├── SKILL.md                     20 KB entry: C/G rules, 8 entries, 9 steps, routing table
+│   ├── references/                  30 files, loaded on demand
+│   ├── templates/                   16 files: 立项书 / 规划 / 策划 / 设计 / 范畴表 / 集成面 /
+│   │                                           验收.sh / 反合理化表 / 文档宪法 / 切片表 / 任务书
 │   └── scripts/
 │       ├── gate.sh                  the machine gate
 │       └── arch-check.sh            placement + boundary check
@@ -237,6 +245,7 @@ The Go test cannot see the panel repository. The gate can, because the dependenc
 | [docs/install.md](docs/install.md) | Every install path, verification, uninstall |
 | [docs/agent-directories.md](docs/agent-directories.md) | Per-agent skill directory table + manual install |
 | [docs/why.md](docs/why.md) | Why formula-shaped constraints beat prose, and where the limits are |
+| [docs/flow-observed.md](docs/flow-observed.md) | The flow an actual 71-turn session produced, and which failure each 0.8.0 change grew out of (Chinese) |
 | [CHANGELOG.md](CHANGELOG.md) | What changed, and why each change exists |
 
 ## License

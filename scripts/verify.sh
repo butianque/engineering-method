@@ -133,9 +133,23 @@ done
 # ---------------------------------------------------------------- 6 artefacts
 head2 "6 templates and gates"
 
-for t in 立项书.md 规划.md 策划.md 设计.md 范畴表.md 集成面.md 验收.sh 反合理化表.md; do
+for t in 立项书.md 规划.md 策划.md 设计.md 范畴表.md 集成面.md 验收.sh 反合理化表.md 文档宪法.md 切片表.md 任务书.md; do
   if [ -s "$SKILL_DIR/templates/$t" ]; then ok "template: $t"
   else bad "missing template: templates/$t"; fi
+done
+
+# The two new modes exist because 立项 and 切片 are the two places where a
+# project silently stops being verifiable. A mode that is documented but absent
+# is a promise the gate cannot keep.
+for m in --charter --board; do
+  if grep -q -- "$m" "$SKILL_DIR/scripts/gate.sh"; then ok "gate.sh supports $m"
+  else bad "gate.sh lacks $m (documented in SKILL.md but not implemented)"; fi
+done
+
+# references added in 0.8.0: the cognition chain, the charter, the slice board
+for r in r5-axiom-chain.md r6-project-charter.md r7-slice-board.md; do
+  if [ -s "$SKILL_DIR/references/$r" ]; then ok "reference: $r"
+  else bad "missing reference: references/$r"; fi
 done
 
 # gate.sh must still refuse; a gate that always passes is worse than no gate
@@ -179,10 +193,42 @@ grep -q -- '-DryRun' "$ROOT/install.ps1" && ok "install.ps1 supports -DryRun" ||
 # ---------------------------------------------------------------- 9 docs
 head2 "9 docs exist"
 
-for d in README.md README.zh-CN.md LICENSE CHANGELOG.md docs/install.md docs/agent-directories.md docs/why.md; do
+for d in README.md README.zh-CN.md LICENSE CHANGELOG.md docs/install.md docs/agent-directories.md docs/why.md docs/flow-observed.md; do
   if [ -s "$ROOT/$d" ]; then ok "$d"
   else bad "missing $d"; fi
 done
+
+# ---------------------------------------------------------------- 10 0.8.0 additions
+# The three references carry the three failures 0.8.0 exists to catch (cognition /
+# charter / slice board). A pointer in SKILL.md to a file that is not there is the
+# exact silent loss check 3 cannot see, because check 3 only greps SKILL.md text.
+head2 "10 0.8.0 references"
+
+for r in r5-axiom-chain.md r6-project-charter.md r7-slice-board.md; do
+  if [ -s "$SKILL_DIR/references/$r" ]; then ok "references/$r"
+  else bad "missing references/$r"; fi
+done
+
+# gate.sh must actually implement the modes it advertises
+grep -q -- '--charter' "$SKILL_DIR/scripts/gate.sh" && ok "gate.sh has --charter" \
+  || bad "gate.sh advertises --charter but does not implement it"
+grep -q -- '--board' "$SKILL_DIR/scripts/gate.sh" && ok "gate.sh has --board" \
+  || bad "gate.sh advertises --board but does not implement it"
+
+# ...and it must refuse, not pass, a project with no charter at all
+EMPTY="$(mktemp -d 2>/dev/null || echo "$ROOT/.verify-empty")"
+mkdir -p "$EMPTY"
+if bash "$SKILL_DIR/scripts/gate.sh" "$EMPTY" --steps 0 --charter >/dev/null 2>&1; then
+  bad "gate.sh --charter passed a project with no charter"
+else
+  ok "gate.sh --charter refuses a project with no charter"
+fi
+if bash "$SKILL_DIR/scripts/gate.sh" "$EMPTY" --steps 0 --board >/dev/null 2>&1; then
+  bad "gate.sh --board passed a project with no slice board"
+else
+  ok "gate.sh --board refuses a project with no slice board"
+fi
+rmdir "$EMPTY" 2>/dev/null || rm -rf "$EMPTY"
 
 # ---------------------------------------------------------------- verdict
 say ""

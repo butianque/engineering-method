@@ -3,11 +3,19 @@
 #
 # 用法：
 #   bash gate.sh <项目目录>                       # 查全部八件套
-#   bash gate.sh <项目目录> --steps 5             # 只查范畴表（范畴入口）
+#   bash gate.sh <项目目录> --steps 4             # 只查范畴表（范畴入口）
 #   bash gate.sh <项目目录> --steps 0,1           # 只查立项书 + 规划
 #   bash gate.sh <项目目录> --done                # 额外跑验收.sh
 #   bash gate.sh <项目目录> --arch                # 额外跑 arch-check.sh（分类与落位）
 #   bash gate.sh <项目目录> --spiral              # 额外查螺旋：每轮必须有新增事实
+#   bash gate.sh <项目目录> --charter             # 额外查立项：七段 / 九域 / 宪法 / 裁决点 / 状态表
+#   bash gate.sh <项目目录> --board               # 额外查切片表：四列 / 反证 / 顺序行 / 无待定
+#
+#   --charter / --board 认文件名关键词，不要求固定文件名：
+#     立项书 → 立项书.md，或名字含「立项书」的 .md（如 00-立项书-0.0.3.md）
+#     宪法   → 文档宪法.md，或名字含「宪法」/「纪律」的 .md
+#     切片   → 切片表.md，或名字含「切片」的 .md（如 15-实施切片.md）
+#   理由：真实项目几乎都带编号前缀，要求改名等于要求重写索引。
 #
 # 退出码：0 = PASS，1 = BLOCK，2 = 用法错误
 #
@@ -20,20 +28,24 @@ DIR=""
 MODE=""
 ARCH=""
 SPIRAL=""
+CHARTER=""
+BOARD=""
 STEPS="0,1,2,3,4,5,6,7"
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --done)   MODE="--done"; shift ;;
-    --arch)   ARCH="1"; shift ;;
-    --spiral) SPIRAL="1"; shift ;;
-    --steps)  STEPS="${2:-}"; shift 2 ;;
-    *)        DIR="${1:-}"; shift ;;
+    --done)    MODE="--done"; shift ;;
+    --arch)    ARCH="1"; shift ;;
+    --spiral)  SPIRAL="1"; shift ;;
+    --charter) CHARTER="1"; shift ;;
+    --board)   BOARD="1"; shift ;;
+    --steps)   STEPS="${2:-}"; shift 2 ;;
+    *)         DIR="${1:-}"; shift ;;
   esac
 done
 
 if [ -z "$DIR" ] || [ ! -d "$DIR" ]; then
-  echo "用法: bash gate.sh <项目目录> [--steps 0,1,2,3,4,5,6,7] [--done] [--arch] [--spiral]" >&2
+  echo "用法: bash gate.sh <项目目录> [--steps 0,1,2,3,4,5,6,7] [--done] [--arch] [--spiral] [--charter] [--board]" >&2
   exit 2
 fi
 
@@ -44,21 +56,41 @@ pass()  { printf 'ok     %s\n' "$*"; }
 
 has() { case ",$STEPS," in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
 
+# 文件解析：先认固定名，再认「名字里含关键词」的第一个 .md
+# 理由：真实项目都带编号前缀（00-立项书-0.0.3.md / 15-实施切片.md），要求改名等于要求重写索引。
+resolve() {
+  local dir="$1" exact="$2" key="$3" f
+  if [ -s "$dir/$exact" ]; then printf '%s' "$dir/$exact"; return 0; fi
+  [ -n "$key" ] || { printf ''; return 1; }
+  # 由浅到深：顶层优先，再一层，再两层（真实项目的文档按域分目录）
+  for f in "$dir"/*.md "$dir"/*/*.md "$dir"/*/*/*.md; do
+    [ -s "$f" ] || continue
+    case "$(basename "$f")" in *"$key"*) printf '%s' "$f"; return 0 ;; esac
+  done
+  printf ''
+  return 1
+}
+
 # ---------- G1 各步产物 ----------
 declare -A F=(
-  [0]="立项书.md"
-  [1]="规划.md"
-  [2]="策划.md"
-  [3]="设计.md"
-  [4]="范畴表.md"
-  [5]="集成面.md"
-  [6]="验收.sh"
-  [7]="反合理化表.md"
+  [0]="立项书.md" [1]="规划.md" [2]="策划.md" [3]="设计.md"
+  [4]="范畴表.md" [5]="集成面.md" [6]="验收.sh" [7]="反合理化表.md"
+)
+# 关键词：空 = 只认固定名（.sh 与表类文件名自带语义，不该被前缀猜中）
+declare -A K=(
+  [0]="立项书" [1]="规划" [2]="策划" [3]="设计"
+  [4]="范畴"   [5]="集成面" [6]="" [7]="反合理化"
 )
 for s in 0 1 2 3 4 5 6 7; do
   if has "$s"; then
     f="${F[$s]}"
-    if [ -s "$DIR/$f" ]; then pass "G1 步$s $f"; else block "G1 缺步$s产物或为空: $f"; fi
+    hit="$(resolve "$DIR" "$f" "${K[$s]}")"
+    if [ -n "$hit" ]; then
+      if [ "$(basename "$hit")" = "$f" ]; then pass "G1 步$s $f"
+      else pass "G1 步$s $f（认作 $(basename "$hit")）"; fi
+    else
+      block "G1 缺步$s产物或为空: $f"
+    fi
   fi
 done
 
@@ -219,6 +251,97 @@ if [ "$SPIRAL" = "1" ]; then
     else
       pass "G8 螺旋有 $VALID 轮，每轮都记了新事实"
     fi
+  fi
+fi
+
+# ---------- G9 立项是基准（--charter）----------
+# 依据：立项书不是介绍，是基准。下游每篇都要能被它逐行判「是/否」。
+# 缺七段 = 目标不可判、边界无限；缺九域 = 那类问题没有词汇，永远看不见。
+if [ "$CHARTER" = "1" ]; then
+  CH="$(resolve "$DIR" 立项书.md 立项书)"
+  if [ -z "$CH" ] || [ ! -s "$CH" ]; then
+    block "G9 缺 立项书（立项书.md，或名字含「立项书」的 .md）"
+  else
+    pass "G9 找到立项书: $(basename "$CH")"
+    # 七段关键词：缺哪段报哪段（同义词算过 —— 概念是「域表」，标题叫「九个域」也行）
+    grep -qE '域表|九域|九个域|总揽' "$CH" && pass "G9 段域表" || block "G9 立项书缺「域表」段"
+    for kw in 依赖顺序 落位表 不做 裁决; do
+      grep -q "$kw" "$CH" && pass "G9 段$kw" || block "G9 立项书缺「$kw」段"
+    done
+
+    # 九域：每域至少被点名一次（少一域 ⇒ 那类问题没词汇）
+    MISS=""
+    for d in 范畴 架构 形式化 工程 框架 细则 数据流 消费者 判据; do
+      grep -q "$d" "$CH" || MISS="$MISS $d"
+    done
+    if [ -n "$MISS" ]; then
+      block "G9 九域不全，缺:$MISS"
+    else
+      pass "G9 九域齐"
+    fi
+
+    # 依赖顺序必须写串/并/汇，否则只是罗列
+    if grep -qE '串|并|汇' "$CH"; then pass "G9 依赖顺序写了串/并/汇"
+    else block "G9 依赖顺序没写串/并/汇 —— 只是罗列，不是顺序"; fi
+
+    # 状态表：草案/定稿/作废 三值
+    if grep -q '定稿' "$CH" && grep -qE '草案|作废' "$CH"; then pass "G9 状态表三值齐"
+    else block "G9 缺状态表三值（草案/定稿/作废）—— 已完成会被重读"; fi
+
+    # 文档宪法：独立文件（名字含「宪法」或「纪律」），或立项书内写明 D1 与 D6
+    CT="$(resolve "$DIR" 文档宪法.md 宪法)"
+    [ -n "$CT" ] || CT="$(resolve "$DIR" 文档宪法.md 纪律)"
+    if [ -n "$CT" ]; then pass "G9 文档宪法存在: $(basename "$CT")"
+    elif grep -q 'D1' "$CH" && grep -q 'D6' "$CH"; then pass "G9 立项书内含宪法 D1/D6"
+    else block "G9 缺文档宪法（文档宪法.md / 名字含「宪法」或「纪律」的 .md，或立项书里的 D1–D6）—— 两份文档会各说一套"; fi
+
+    # 裁决点：未定项必须写「它决定哪些下游文档」
+    if grep -q '决定' "$CH"; then pass "G9 裁决点写明了下游影响"
+    else block "G9 裁决点没写「它决定哪些下游文档」—— 未定项会被忘掉"; fi
+
+    # G10 补丁段：只抓确凿的补丁句式（裸「修订」误伤太大）
+    PATCH=$(grep -nE '原写.{0,30}现改为|补记|修订记录|变更日志' "$CH" 2>/dev/null || true)
+    if [ -n "$PATCH" ]; then
+      block "G10 立项书里有补丁段（D1 禁止：只写当前真相）:"
+      printf '%s\n' "$PATCH" | head -5 | sed 's/^/        /'
+    else
+      pass "G10 无补丁段"
+    fi
+  fi
+fi
+
+# ---------- G11 切片可派（--board）----------
+# 依据：一片 = 一条能从输入走到行、再从行走回语义的功能。
+# 四列缺一列，就会有人问「这片算完了吗」；没有反证的判据不算判据。
+if [ "$BOARD" = "1" ]; then
+  BD="$(resolve "$DIR" 切片表.md 切片)"
+  if [ -s "$BD" ]; then
+    pass "G11 找到切片表: $(basename "$BD")"
+    HDR=""
+    for kw in 数据流 信息流 依赖; do
+      grep -qE "^\|.*$kw" "$BD" || HDR="$HDR $kw"
+    done
+    if [ -n "$HDR" ]; then
+      block "G11 切片表缺列:$HDR（表头必须是 片/功能/数据流出口/信息流出口/依赖）"
+    else
+      pass "G11 四列齐"
+    fi
+
+    if grep -q '反证' "$BD"; then pass "G11 有反证列/段"
+    else block "G11 切片表没有反证 —— 每条判据必须能测出红"; fi
+
+    if grep -qE '→|->' "$BD"; then pass "G11 顺序写成一行"
+    else block "G11 没有顺序行（F1 → (F2 ∥ F3) → …）—— 依赖序只能靠记忆"; fi
+
+    TBD=$(grep -nE '待定|待补|TODO|TBD' "$BD" 2>/dev/null || true)
+    if [ -n "$TBD" ]; then
+      block "G11 切片表还有待定/待补（写「不知道」也得写清了什么不知道）:"
+      printf '%s\n' "$TBD" | head -5 | sed 's/^/        /'
+    else
+      pass "G11 无待定"
+    fi
+  else
+    block "G11 缺 切片表（切片表.md，或名字含「切片」的 .md）—— 不许一边切一边想"
   fi
 fi
 
