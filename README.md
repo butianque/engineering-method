@@ -62,7 +62,7 @@ The outputs are eight files, and `gate.sh` refuses to pass until they are real:
 | `验收.sh` | L1 syntax → L2 unit → **L3 end-to-end from the real entry** |
 | `反合理化表.md` | Excuses → reality, with named consequences |
 
-Three more since 0.8.0 (checked by `--charter` / `--board`): `文档宪法.md` (how docs may change · numbering · single authority), `切片表.md` (one slice = one end-to-end function), `任务书.md` (the nine-section task sheet for a subagent).
+Four more since 0.8.x: `文档宪法.md` (how docs may change · numbering · single authority), `切片表.md` (one slice = one end-to-end function), `任务书.md` (the task sheet for a subagent), `开发日志.md` (one log per slice, six sections).
 
 ## Three ideas worth stealing
 
@@ -204,8 +204,8 @@ Exit codes: `0` pass · `1` blocked · `2` usage error. It only reads. It never 
 engineering-method/
 ├── skills/engineering-method/       the skill itself
 │   ├── SKILL.md                     20 KB entry: C/G rules, 8 entries, 9 steps, routing table
-│   ├── references/                  30 files, loaded on demand
-│   ├── templates/                   16 files: 立项书 / 规划 / 策划 / 设计 / 范畴表 / 集成面 /
+│   ├── references/                  31 files, loaded on demand
+│   ├── templates/                   17 files: 立项书 / 规划 / 策划 / 设计 / 范畴表 / 集成面 /
 │   │                                           验收.sh / 反合理化表 / 文档宪法 / 切片表 / 任务书
 │   └── scripts/
 │       ├── gate.sh                  the machine gate

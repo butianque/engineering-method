@@ -204,10 +204,24 @@ done
 # exact silent loss check 3 cannot see, because check 3 only greps SKILL.md text.
 head2 "10 0.8.0 references"
 
-for r in r5-axiom-chain.md r6-project-charter.md r7-slice-board.md; do
+for r in r5-axiom-chain.md r6-project-charter.md r7-slice-board.md r8-slice-rhythm.md; do
   if [ -s "$SKILL_DIR/references/$r" ]; then ok "references/$r"
   else bad "missing references/$r"; fi
 done
+
+# 0.8.2 templates: the six-section dev log is the artifact that turns a slice
+# into something a future agent can read instead of re-deriving.
+if [ -s "$SKILL_DIR/templates/开发日志.md" ]; then ok "template: 开发日志.md"
+else bad "missing template: templates/开发日志.md"; fi
+
+# r6 must keep the "one question, three fallbacks" rule; deleting it silently
+# restores the old two-step (ask, then maybe look up the industry) which the
+# user explicitly rejected.
+if grep -q '一问三备' "$SKILL_DIR/references/r6-project-charter.md"; then
+  ok "r6 keeps 一问三备 (guidance and fallback on one track)"
+else
+  bad "r6 lost 一问三备 — guidance and fallback drifted back into two steps"
+fi
 
 # gate.sh must actually implement the modes it advertises
 grep -q -- '--charter' "$SKILL_DIR/scripts/gate.sh" && ok "gate.sh has --charter" \
